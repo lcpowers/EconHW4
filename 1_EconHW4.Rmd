@@ -1,0 +1,232 @@
+---
+title: "1_EconHW4"
+author: "Claire Powers"
+date: "5/27/2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages_data}
+
+library(tidyverse)
+library(cowplot)
+library(nlstools)
+library(stats)
+
+df <- read.csv("HW4Data.csv")
+#df
+```
+
+```{r plots}
+
+a <- ggplot(df, aes(x=df$Abatement))+
+  geom_smooth(method="lm",aes(y=df$MC_A))+
+  geom_point(aes(y=df$MC_A))+
+  ylim(-15,150)+
+  xlab("Tons of Carbon Emitted")+
+  ylab("Marginal Cost\nof Abatement ($)")+
+  theme_classic()
+
+b <- ggplot(df, aes(x=df$Abatement))+
+  geom_smooth(method="lm",aes(y=df$MC_B))+
+  geom_point(aes(y=df$MC_B))+
+  ylim(-15,150)+
+  xlab("Tons of Carbon Emitted")+
+  ylab("Marginal Cost\nof Abatement ($)")+
+  theme_classic()
+
+c <- ggplot(df, aes(x=df$Abatement))+
+  geom_smooth(method="lm",aes(y=df$MC_C))+
+  geom_point(aes(y=df$MC_C))+
+  xlab("Tons of Carbon Emitted")+
+  ylab("Marginal Cost\nof Abatement ($)")+
+  ylim(-15,150)+
+  theme_classic()
+
+d <- ggplot(df, aes(x=df$Abatement))+
+  geom_smooth(method="lm",aes(y=df$MC_D))+
+  geom_point(aes(y=df$MC_D))+
+  xlab("Tons of Carbon Emitted")+
+  ylab("Marginal Cost\nof Abatement ($)")+
+  ylim(-15,150)+
+  theme_classic()
+
+#plot_grid(a,b,c,d,labels = c("A","B","C","D"))
+```
+
+```{r}
+e <- ggplot(df, aes(x=df$Abatement))+
+  geom_smooth(method="lm",aes(y=df$MC_A,color="red"), se=FALSE)+
+  geom_point(aes(y=df$MC_A))+
+  geom_smooth(method="lm",aes(y=df$MC_B,color="green"),se=FALSE)+
+  geom_point(aes(y=df$MC_B),shape=4)+
+  geom_smooth(method="lm",aes(y=df$MC_C),se=FALSE)+
+  geom_point(aes(y=df$MC_C),shape=2)+
+  geom_smooth(method="lm",aes(y=df$MC_D),se=FALSE)+
+  geom_point(aes(y=df$MC_D),shape=3)+
+  xlab("Tons of Carbon Emitted")+
+  ylab("Marginal Cost\nof Abatement ($)")+
+  ylim(-15,150)+
+  theme_classic()
+```
+$$C(t) = A/(1+B*e^{rt})$$
+
+A = 40
+C0 = 12
+B = (40-12)/12 ~ 2.33333
+
+```{r growth_estimate}
+r_est <- lm(log(df$MC_B[1:5])~df$Abatement[1:5])
+r_est
+```
+
+```{r}
+model_A <- lm(MC_A ~ Abatement, data=df)
+summary(model_A)
+
+funA <- function(Abatement){
+  costA <- model_A$coefficients[1] + model_A$coefficients[2]*Abatement
+}
+
+sector_A <- data.frame(seq(0,180,length.out=181))
+colnames(sector_A) <- c("Abatement")
+sector_A$MC_A <- funA(sector_A$Abatement)
+
+ggplot(sector_A, aes(x=Abatement, y=MC_A))+
+  geom_line()+
+  geom_point(data=df, aes(x=Abatement, y=MC_A))+
+  geom_segment(x=0,y=95,xend=180,yend=0)
+```
+
+```{r nls}
+abatement_fit <- nls(MC_B ~ A/(1 + B*exp(-r*Abatement)),
+                data = df,
+                start = list(A = 40, B = 2.33333, r = 0.006224),
+                trace = TRUE)
+summary(abatement_fit)
+```
+
+```{r B_abatement_cost}
+A <- coef(abatement_fit)[1]
+B <- coef(abatement_fit)[2]
+r <- coef(abatement_fit)[3]
+
+abatement_seq <- seq(0, 200, length = 200)
+abatement_predict <- A/(1 + B*exp(-r*abatement_seq))
+
+prediction.df <- data.frame(abatement_seq, abatement_predict)
+
+ggplot(df, aes(x=Abatement, MC_B))+
+  geom_point(color="blue", size = 3)+
+  geom_line(data=prediction.df, aes(x=abatement_seq, y=abatement_predict))
+```
+
+$$Cost(x) = Y + a*x + b*x^2$$
+Y = 10
+a = 1.17
+b = 5
+
+```{r}
+abatement_fitC <- nls(MC_C ~ (Y + a*Abatement + b*(Abatement^2)),
+                data = df,
+                start = list(Y = 10, a = 1.17, b = 5),
+                trace = TRUE)
+
+summary(abatement_fitC)
+
+C <- lm(MC_C~Abatement, data=df)
+summary(C)
+
+Cfun <- function(Abatement){
+  a <- -0.036892
+  b <- 0.005471
+  Y <- 7.495075
+  cost <- Y + a*Abatement + b*(Abatement^2)
+}
+
+abatement110 <- Cfun(110)
+abatement110
+
+abatement150 <- Cfun(150)
+abatement150
+```
+
+```{r}
+Y <- coef(abatement_fitC)[1]
+a <- coef(abatement_fitC)[2]
+b <- coef(abatement_fitC)[3]
+
+abatement_seq_C <- seq(0, 220, length = 220)
+abatement_predict_C <- Cfun(abatement_seq_C)
+
+prediction.df_C <- data.frame(abatement_seq_C, abatement_predict_C)
+
+ggplot(df, aes(x=Abatement, MC_C))+
+  geom_point(color="blue", size = 3)+
+  geom_line(data=prediction.df_C, aes(x=abatement_seq_C, y=abatement_predict_C))
+```
+
+```{r sectorD_fit}
+model_1 <- lm(MC_D ~ Abatement, data=df[1:7,])
+model_1
+
+model_2 <- lm(MC_D ~ Abatement, data=df[8:16,])
+model_2
+summary(model_2)
+```
+
+```{r}
+ggplot(df,aes(x=Abatement,y=MC_D))+
+  geom_point() + 
+  geom_smooth(data=subset(df, Abatement >= 70), method='lm', se=F)+
+  geom_smooth(data=subset(df, Abatement <= 70), method='lm',formula=y~x,se=F)
+```
+```{r}
+df_low <- data.frame(df$Abatement[1:7],df$MC_D[1:7])
+colnames(df_low) <- c("Abatement","MC_D")
+df_high <- data.frame(df$Abatement[7:16],df$MC_D[7:16])
+colnames(df_high) <- c("Abatement","MC_D")
+
+model_low <- lm(MC_D ~ Abatement, data=df_low)
+model_low
+
+low_vector <- c(seq(0,75,length.out=76))
+low_data <- data.frame(c(seq(0,75,length.out=76)))
+
+#low_data <- data.frame(low_vector)
+#colnames(low_data) <- c("Abatement")
+#low_data$predictions <- predict(model_low, newdata = low_data, se.fit = TRUE)
+
+lowfun <- function(abatement){
+  predictions <- model_low$coefficients[1] + model_low$coefficients[2]*abatement
+}
+
+low_data$predictions <- lowfun(low_vector)
+colnames(low_data) <- c("Abatement","MC_D")
+```
+
+```{r}
+high_vector <- seq(60,300,length.out=241)
+high_data <- data.frame(seq(60,300,length.out=241))
+
+model_high <- lm(MC_D ~ Abatement, data=df[7:16,])
+summary(model_high)
+
+highfun <- function(abatement){
+  predictions <- model_high$coefficients[1] + model_high$coefficients[2]*abatement
+}
+
+high_data$predictions <- highfun(high_vector)
+colnames(high_data) <- c("Abatement","MC_D")
+```
+
+```{r}
+ggplot(low_data, aes(x=Abatement, y = MC_D))+
+  geom_line()+
+  geom_line(data=high_data, aes(y=MC_D))+
+  geom_point(data=df, aes(x=Abatement, y=MC_D))
+```
+
