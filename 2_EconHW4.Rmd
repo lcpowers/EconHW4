@@ -1,0 +1,197 @@
+---
+title: "204 Homework 4"
+author: "Claire Powers and Tom Paschos"
+date: "5/30/2018"
+output:
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r packages_data, include=FALSE}
+library(tidyverse)
+library(cowplot)
+library(nlstools)
+library(stats)
+library(reshape2)
+library(stats)
+
+df <- read.csv("HW4Data.csv")
+```
+##Initial plots and exploring the data
+
+- Red lines are linear models, blue lines are "loess" which basically just follows the data points
+```{r Initial_plots, echo=FALSE}
+a <- ggplot(df, aes(x=df$Abatement))+
+  geom_smooth(method="loess",aes(y=df$MC_A))+
+  geom_smooth(method="lm",se=F,color="red",aes(y=df$MC_A))+
+  geom_point(aes(y=df$MC_A))+
+  #ylim(-15,150)+
+  ggtitle("A")+
+  xlab("Tons of Carbon Emitted")+
+  ylab("Marginal Cost\nof Abatement ($)")+
+  theme_classic()
+a
+
+b <- ggplot(df, aes(x=df$Abatement))+
+  geom_smooth(method="loess",aes(y=df$MC_B))+
+  geom_smooth(method="lm",se=F,color="red",aes(y=df$MC_B))+
+  geom_point(aes(y=df$MC_B))+
+  #ylim(-15,150)+
+  ggtitle("B")+
+  xlab("Tons of Carbon Emitted")+
+  ylab("Marginal Cost\nof Abatement ($)")+
+  theme_classic()
+b
+
+c <- ggplot(df, aes(x=df$Abatement))+
+  geom_smooth(method="loess",aes(y=df$MC_C))+
+  geom_smooth(method="lm",se=F,color="red",aes(y=df$MC_C))+
+  geom_point(aes(y=df$MC_C))+
+  ggtitle("C")+
+  xlab("Tons of Carbon Emitted")+
+  ylab("Marginal Cost\nof Abatement ($)")+
+  #ylim(-15,150)+
+  theme_classic()
+c
+
+d <- ggplot(df, aes(x=df$Abatement))+
+  geom_smooth(method="loess",se=F,aes(y=df$MC_D))+
+  geom_smooth(method="lm",se=F,color="red",aes(y=df$MC_D))+
+  geom_point(aes(y=df$MC_D))+
+  ggtitle("D")+
+  xlab("Tons of Carbon Emitted")+
+  ylab("Marginal Cost\nof Abatement ($)")+
+  #ylim(-15,150)+
+  theme_classic()
+d
+plot_grid(a,b,c,d)
+```
+
+- Sector A: Linear
+
+- Sector B: Logistic
+
+- Sector C: Exponential
+
+- Sector D: Linear segments
+
+####Combining all data point for sectors A,B, and C. Potentially used for aggregate?
+```{r combined_plot}
+e <- ggplot(df, aes(x=df$Abatement))+
+  geom_smooth(method="lm",aes(y=df$MC_A), se=FALSE)+
+  geom_point(aes(y=df$MC_A))+
+  geom_smooth(method="lm",aes(y=df$MC_B),se=FALSE)+
+  geom_point(aes(y=df$MC_B),shape=4)+
+  geom_smooth(method="lm",aes(y=df$MC_C),se=FALSE)+
+  geom_point(aes(y=df$MC_C),shape=2)+
+  geom_smooth(method="lm",aes(y=df$MC_D),se=FALSE)+
+  geom_point(aes(y=df$MC_D),shape=3)+
+  xlab("Tons of Carbon Emitted")+
+  ylab("Marginal Cost\nof Abatement ($)")+
+  ylim(-15,150)+
+  theme_classic()
+e
+
+#Dataframe
+df1 <- df %>% 
+  select("Abatement","MC_A","MC_B","MC_C")
+combo_df <- melt(df1, id=c("Abatement"))
+
+combo_plot <- ggplot(combo_df, aes(x=Abatement))+
+  geom_smooth(method="loess",aes(y=value))+
+  geom_point(aes(y=value, color = variable, shape = variable))+
+  xlab("Tons of Carbon Emitted")+
+  ylab("Marginal Cost\nof Abatement ($)")+
+  ylim(-15,150)+
+  theme_classic()
+combo_plot
+
+combo_model <- lm(value~Abatement, data=combo_df)
+summary(combo_model)
+```
+##Inidividual models for each sector
+###Sector A.
+```{r sector_A}
+#Linear model
+model_A <- lm(MC_A ~ Abatement, data=df)
+summary(model_A)
+
+plot(model_A)
+AIC(model_A)
+
+#Vector to use to make predictions
+A_vector <- data.frame(seq(0,180,length.out=181))
+colnames(A_vector) <- c("Abatement")
+
+#Predictions
+sector_A <- predict(model_A, newdata = A_vector,se.fit=TRUE,df=FALSE)
+
+#Data.frame
+A_df <- data.frame(A_vector,sector_A)
+colnames(A_df) <- c("Abatement","MC_A","SE","DF","residuals")
+  
+#For 
+#funA <- function(Abatement){
+#  costA <- model_A$coefficients[1] + model_A$coefficients[2]*Abatement
+#}
+#sector_A$MC_A2 <- funA(sector_A$Abatement)
+
+ggplot(A_df, aes(x=Abatement, y=MC_A))+
+  geom_line()+
+  geom_point(data=df, aes(x=Abatement, y=MC_A))+
+  geom_segment(x=0,y=95,xend=180,yend=0)
+```
+
+
+##Sector B. 
+```{r}
+b
+```
+
+Integrated logistic Growth Equation
+$$Cost(Abatement) = \frac{Max~Value}{(1+B*e^{rt})}$$
+Initial estimates for values in the equation based on plot
+
+-Max = 40
+
+-C0 = 12
+
+-B = (40-12)/12 ~ 2.33333
+
+```{r r_est_and_NLS}
+r_est <- lm(log(df$MC_B[1:5])~df$Abatement[1:5])
+r_est
+
+#Logistic equations using NLS
+B_model <- nls(MC_B ~ maxValue/(1 + B*exp(-r*Abatement)),
+                data = df,
+                start = list(maxValue = 40, B = 2.33333, r = 0.006224),
+                trace = TRUE)
+summary(B_abatement_fit)
+
+maxValue <- coef(B_abatement_fit)[1]
+B <- coef(B_abatement_fit)[2]
+r <- coef(B_abatement_fit)[3]
+
+B_vector <- seq(0, 200, length = 200)
+B_predict <- data.frame(predict(B_model, list(Abatement = B_vector), se.fit=TRUE))
+
+B_df <- data.frame(B_vector, B_predict)
+colnames(B_df) <- c("Abatement","MC_B")
+
+ggplot(df, aes(x=Abatement, y=MC_B))+
+  geom_point(color="blue", size = 3)+
+  geom_smooth(data=B_df,aes(x=Abatement,y=))
+
+B_model_lm <- lm(MC_B ~ Abatement, data=df)
+
+plot(B_model_lm)
+plot(B_model)
+
+AIC(B_model_lm)
+AIC(B_model)
+```
+
