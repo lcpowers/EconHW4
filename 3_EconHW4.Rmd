@@ -93,7 +93,7 @@ AIC(A_lm)
 Using Sector A's linear model equation to make predicitons
 ```{r a_predictions}
 #Vector to make predictions
-A_vector <- seq(0,180,length.out=181)
+A_vector <- seq(0,220,length.out=221)
 
 #Predictions
 A_preds <- predict(A_lm, list(Abatement = A_vector),se.fit=TRUE)
@@ -148,7 +148,7 @@ AIC(B_lm)
 AIC(B_nls)
 
 #Predictions and plot using nls
-B_vector <- seq(0, 200, length = 201)
+B_vector <- seq(0, 220, length = 221)
 B_preds_nls <- predict(B_nls, list(Abatement = B_vector), se.fit=TRUE,df=FALSE)
 
 B_df_nls <- data.frame(B_vector, B_preds_nls)
@@ -181,19 +181,11 @@ a = 1.17
 b = 5
 ```{r sector_c}
 #Exponential model
-C_nls <- nls(MC_C ~ (Y + a*Abatement + b*(Abatement^2)),
+C_nls <- nls(MC_C ~ (0 + a*(Abatement)^2),
                 data = df,
-                start = list(Y = 10, a = 1.17, b = 5),
+                start = list(a=5),
                 trace = TRUE)
 summary(C_nls)
-
-#Coefficients from the model
-Y <- coef(C_nls)[1]
-Y
-a <- coef(C_nls)[2]
-a
-b <- coef(C_nls)[3]
-b
 
 #linear model
 C_lm <- lm(MC_C~Abatement, data=df)
@@ -220,6 +212,7 @@ c2 <- ggplot(data=df, aes(x=Abatement, y=MC_C))+
   geom_point(color="blue", size = 3)+
   geom_line(data=C_df_nls, aes(x=Abatement, y=MB_C))+
   geom_line(data=C_df_nls, aes(x=Abatement, y=MC_C))
+c2
 ```
 
 ####Sector D
@@ -248,27 +241,84 @@ plot_grid(a2,b2,c2,d2)
 ```{r}
 max <- 180+200+220
 Q_bar <- max/2
-
-
 ```
 
 ```{r a_demand}
-
 a_demand <- lm(MB_A ~ Abatement, data = A_df)
 summary(a_demand)
+a_demand$coefficients
 ```
 
 ```{r b_demand}
-
 b_demand <- lm(MB_B ~ Abatement, data=B_df_lm)
 summary(b_demand)
 ```
 
 ```{r}
-C_demand <- nls(MB_C ~ (Y * exp^(-Abatement)),
-                data = df,
-                start = list(Y = ),
+#C_nls <- nls(MC_C ~ (Y + Q*Abatement + Q*Abatement^2))
+C_demand <- nls(MB_C ~ (260.243550*(exp(a*Abatement))),
+                data = C_df_nls,
+                start = list(a=.01),
                 trace = TRUE)
 summary(C_demand)
+
+C_df_nls$demand <- predict(C_demand, list(Abatement = C_vector))
+
+C_df_demand <- data.frame(C_vector,C_lm_demand)
+colnames(C_df_demand) <- c("Abatement","Demand")
+
+ggplot(data=C_df_nls, aes(x=Abatement, y=MB_C))+
+  geom_line(aes(y=demand))+
+  geom_line()+
+  geom_line(data=C_df_nls, aes(y=MC_C))+
+  scale_x_continuous(expand = c(0, 0))+
+  scale_y_continuous(expand = c(0, 0))
+
+write.csv(C_df_nls, file = "MyData.csv")
+
+#y = (0,265)
+#x = (220,0)
+C_demand_slope <- (265-0)/(0-220)
+
+C_df_nls$demand <- 265 + C_demand_slope*C_df_nls$Abatement
+```
+
+```{r demand}
+#A Demand curve
+#P(Q) = 95.19-.5768(Q)
+#Q(P) = (95.19-P)/.5768
+
+#B Demand Curve
+#P(Q) = 49.07-.1987*Q
+#Q(P) = (49.07-P)/.1987
+
+#C Supply
+#P(Q) ~ 260.243550*0.9881161^(Q)
+#Q(P) = (log(P)-log(260))/log(.988)
+
+#Ag demand function
+b_demand$coefficients
+
+Ag_Dfun <- function(P){
+  A_D <- ifelse((95.1870630-P)/(0.5768419)<0,0,(95.1870630-P)/(0.5768419))
+  B_D <- ifelse((49.0665582-Price)/(0.1987443)<0,0,(49.0665582-Price)/(0.1987443))
+  C_D <- (log(P)-log(260.243550))/log(0.9881161)
+  Ag_Q <- A_D + B_D + C_D
+  return(Ag_Q)
+}
+
+Price <- seq(0,260,length.out=261)
+ag_Demand <- Ag_Dfun(Price)
+aggregate <- data.frame(Price,ag_Demand)
+
+ggplot(aggregate, aes(x=ag_Demand,y=Price))+
+  geom_line()+
+  scale_x_continuous(expand = c(0, 0))+
+  scale_y_continuous(expand = c(0, 0))
+```
+
+```{r}
+
+
 ```
 
